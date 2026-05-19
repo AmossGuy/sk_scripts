@@ -20,7 +20,7 @@ folder_path = sys.argv[1]
 with open(f"{folder_path}/header.json") as header_file:
 	header_json = json.load(header_file)
 
-ltb_file_path = folder_path[0:folder_path.rindex(".ltb")] + ".ltb"
+ltb_file_path = folder_path[0:folder_path.rindex(".ltb")] + " imploded.ltb"
 ltb_file = open(ltb_file_path, "wb")
 
 # since the header contains pointers to everything we can't write it until we've placed the data
