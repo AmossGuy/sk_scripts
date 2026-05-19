@@ -25,14 +25,36 @@ ltb_file.write(b"\0" * 16 * 9)
 row_data_pointers = []
 for i in range(8):
 	row_data_pointers.append(ltb_file.tell())
+	count = header_json["rows"][i]["entry_count"]
 	
 	if i == 2:
-		pass # todo
+		for j in range(count):
+			with open(f"{folder_path}/image {j} metadata.json", "r") as metadata_file:
+				metadata_json = json.load(metadata_file)
+			
+			ltb_file.write(struct.pack(
+				"<" + "I" * 19,
+				metadata_json["unknown_a"],
+				metadata_json["compression"],
+				metadata_json["width"],
+				metadata_json["height"],
+				metadata_json["unknown_b"],
+				metadata_json["unknown_c"],
+				*metadata_json["palettes"],
+				metadata_json["unknown_d"],
+				os.path.getsize(f"{folder_path}/image {j}.wflz"),
+			))
 	elif i == 7:
-		pass # todo
+		for j in range(count):
+			pass
 	else:
 		with open(f"{folder_path}/row {i} data", "rb") as row_data_file:
 			ltb_file.write(row_data_file.read())
 
 ltb_file.seek(0)
-# todo: write actual header
+ltb_file.write(struct.pack("<IIII", *header_json["start"]))
+for i in range(8):
+	row = header_json["rows"][i]
+	ltb_file.write(struct.pack("<IIQ", row["mystery_number"], row["entry_count"], row_data_pointers[i]))
+
+print(f"success! imploded into \"{ltb_file_path}\"")
