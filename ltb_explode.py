@@ -6,7 +6,7 @@ import struct
 import sys
 
 row_entry_sizes = [
-	32 + (4 * 7),
+	32 + (4 * 24),
 	4 * 5,
 	4 * 19,
 	4,
