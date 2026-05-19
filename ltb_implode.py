@@ -5,6 +5,11 @@ import os
 import struct
 import sys
 
+def ensure_alignment(f):
+	pos = f.tell()
+	if (pos % 8) != 0:
+		f.write(b"\0" * (8 - (pos % 8)))
+
 if len(sys.argv) != 2:
 	print("tool requires exactly one argument: the exploded folder path")
 	print("the ltb is created adjacent to this folder")
@@ -54,12 +59,15 @@ for i in range(8):
 			image_data_pointers.append(ltb_file.tell())
 			with open(f"{folder_path}/image {j}.wflz", "rb") as wflz_data_file:
 				ltb_file.write(wflz_data_file.read())
-			
+		
+		ltb_file.seek(image_data_metapointer)
 		ltb_file.write(struct.pack("<" + "Q" * count, *image_data_pointers))
 		# no need to seek back since this is the last row
 	else:
 		with open(f"{folder_path}/row {i} data", "rb") as row_data_file:
 			ltb_file.write(row_data_file.read())
+	
+	ensure_alignment(ltb_file)
 
 ltb_file.seek(0)
 ltb_file.write(struct.pack("<IIII", *header_json["start"]))
