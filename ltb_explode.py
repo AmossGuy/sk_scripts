@@ -69,7 +69,7 @@ for i in range(8):
 			
 			with open(f"{explode_folder_path}/image {j}.wflz", "wb") as image_write_file:
 				ltb_file.seek(pointer)
-				#image_write_file.write(ltb_file.read(
+				image_write_file.write(ltb_file.read(image_metadata[j]["data_size"]))
 	else:
 		with open(f"{explode_folder_path}/row {i} data", "wb") as data_write_file:
 			data_write_file.write(row_data)
