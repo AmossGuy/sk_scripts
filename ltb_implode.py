@@ -45,8 +45,18 @@ for i in range(8):
 				os.path.getsize(f"{folder_path}/image {j}.wflz"),
 			))
 	elif i == 7:
+		image_data_metapointer = ltb_file.tell()
+		# again, we can only write pointers after the things they point to
+		ltb_file.write(b"\0" * 8 * count)
+		
+		image_data_pointers = []
 		for j in range(count):
-			pass
+			image_data_pointers.append(ltb_file.tell())
+			with open(f"{folder_path}/image {j}.wflz", "rb") as wflz_data_file:
+				ltb_file.write(wflz_data_file.read())
+			
+		ltb_file.write(struct.pack("<" + "Q" * count, *image_data_pointers))
+		# no need to seek back since this is the last row
 	else:
 		with open(f"{folder_path}/row {i} data", "rb") as row_data_file:
 			ltb_file.write(row_data_file.read())
