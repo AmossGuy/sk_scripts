@@ -20,7 +20,7 @@ ltb_file = open(ltb_file_path, "wb")
 
 # since the header contains pointers to everything we can't write it until we've placed the data
 # here we reserve a placeholder to replace with the actual header later
-ltb_file.write([0] * 16 * 9)
+ltb_file.write(b"\0" * 16 * 9)
 
 row_data_pointers = []
 for i in range(8):
@@ -31,8 +31,8 @@ for i in range(8):
 	elif i == 7:
 		pass # todo
 	else:
-		with open("rb") as row_data_file:
-			ltb_file.write(row_data_file.readall())
+		with open(f"{folder_path}/row {i} data", "rb") as row_data_file:
+			ltb_file.write(row_data_file.read())
 
 ltb_file.seek(0)
 # todo: write actual header
