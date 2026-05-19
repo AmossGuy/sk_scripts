@@ -8,7 +8,7 @@ import sys
 row_entry_sizes = [
 	32 + (4 * 7),
 	4 * 5,
-	4 * 6,
+	4 * 19,
 	4,
 	2,
 	8,
@@ -41,10 +41,37 @@ if not os.path.exists(explode_folder_path):
 with open(f"{explode_folder_path}/header.json", "w") as header_json_file:
 	json.dump(header_json, header_json_file)
 
+image_metadata = []
+
 for i in range(8):
 	ltb_file.seek(row_pointers[i])
 	row_data = ltb_file.read(header_rows[i]["entry_count"] * row_entry_sizes[i])
-	with open(f"{explode_folder_path}/row {i} data", "wb") as data_write_file:
-		data_write_file.write(row_data)
+	if i == 2: # image metadata
+		for j in range(header_rows[i]["entry_count"]):
+			raw_metadata = struct.unpack("<" + "I"*19, row_data[j*4*19 : j*4*19 + 4*19])
+			image_metadata.append({
+				"unknown_a": raw_metadata[0],
+				"compression": raw_metadata[1],
+				"width": raw_metadata[2],
+				"height": raw_metadata[3],
+				"unknown_b": raw_metadata[4],
+				"unknown_c": raw_metadata[5],
+				"palettes": raw_metadata[6:6+11],
+				"unknown_d": raw_metadata[17],
+				"data_size": raw_metadata[18],
+			})
+			
+			with open(f"{explode_folder_path}/image {j} metadata.json", "w") as meta_write_file:
+				json.dump(image_metadata[-1], meta_write_file)
+	elif i == 7: # image data (wflz)
+		for j in range(header_rows[i]["entry_count"]):
+			(pointer,) = struct.unpack("<Q", row_data[j*8 : j*8 + 8])
+			
+			with open(f"{explode_folder_path}/image {j}.wflz", "wb") as image_write_file:
+				ltb_file.seek(pointer)
+				#image_write_file.write(ltb_file.read(
+	else:
+		with open(f"{explode_folder_path}/row {i} data", "wb") as data_write_file:
+			data_write_file.write(row_data)
 
 print(f"success! exploded into \"{explode_folder_path}\"")
