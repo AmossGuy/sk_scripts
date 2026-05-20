@@ -116,7 +116,7 @@ def wflz_compress(data):
 if __name__ == "__main__":
 	if len(sys.argv) != 2:
 		print("tool requires exactly one argument: the path to some raw data to compress")
-		print("the compressed version is created adjacent to this file")
+		print("the compressed version is created adjacent to that file")
 		sys.exit(1)
 	
 	path = sys.argv[1]
