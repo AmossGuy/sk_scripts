@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
+import io
 import json
 import os
 import struct
 import sys
+
+from PIL import Image
+from wflz_decompress import wflz_decompress
 
 row_entry_sizes = [
 	32 + (4 * 24),
@@ -66,10 +70,15 @@ for i in range(8):
 	elif i == 7: # image data (wflz)
 		for j in range(header_rows[i]["entry_count"]):
 			(pointer,) = struct.unpack("<Q", row_data[j*8 : j*8 + 8])
+			m = image_metadata[j]
 			
-			with open(f"{explode_folder_path}/image {j}.wflz", "wb") as image_write_file:
-				ltb_file.seek(pointer)
-				image_write_file.write(ltb_file.read(image_metadata[j]["data_size"]))
+			# seeking and reading here is fine because everything has already been read into row_data
+			ltb_file.seek(pointer)
+			wflz_data = ltb_file.read(m["data_size"])
+			
+			raw_image_data = wflz_decompress(io.BytesIO(wflz_data))
+			image = Image.frombytes("RGBA", [m["width"], m["height"]], raw_image_data)
+			image.save(f"{explode_folder_path}/image {j}.png")
 	else:
 		with open(f"{explode_folder_path}/row {i} data", "wb") as data_write_file:
 			data_write_file.write(row_data)

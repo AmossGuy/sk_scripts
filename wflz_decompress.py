@@ -27,7 +27,6 @@ def wflz_decompress(reader):
 		# kind of a gotcha
 		if backref_length > 0:
 			backref_length += WFLZ_MIN_MATCH_LEN - 1
-			print(backref_dist, backref_length, literal_count)
 		
 		for i in range(backref_length):
 			output.append(output[len(output) - backref_dist])
