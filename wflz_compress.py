@@ -21,7 +21,6 @@ def wflz_hash(b):
 # called wfLZ_MemCmp in the original
 # "returns the number of sequential matching characters"
 def wflz_compare(data, start_a, start_b, max_len):
-	max_len = min(max_len, len(data))
 	matched = 0
 	while matched < max_len and data[start_a + matched] == data[start_b + matched]:
 		matched += 1
@@ -67,20 +66,22 @@ def wflz_compress(data):
 		match_pos = wflz_dict[whash]
 		window_start = read_pos - WFLZ_MAX_MATCH_DIST
 		match_length = 0
+		max_match_len = min(WFLZ_MAX_MATCH_LEN, (len(data) - read_pos))
 		
 		wflz_dict[whash] = read_pos
 		
 		# "a match was found, ensure it really is a match and not a hash collision, and determine its length"
 		if match_pos != None and match_pos >= window_start:
-			match_length = wflz_compare(data, read_pos, match_pos, WFLZ_MAX_MATCH_LEN)
+			match_length = wflz_compare(data, read_pos, match_pos, max_match_len)
 		
-		# TODO: the big if/else
 		if match_length >= WFLZ_MIN_MATCH_LEN:
+			match_dist = read_pos - match_pos
+			
 			block.write_to(writer)
 			block = WflzBlock()
 			read_pos += match_length
 			
-			block.backref_dist = read_pos - match_pos
+			block.backref_dist = match_dist
 			block.backref_length = match_length - WFLZ_MIN_MATCH_LEN + 1
 		# "output a literal byte: no entries for this position found, entry is too far away, entry was a hash collision, or the entry did not meet the minimum match length"
 		else:
@@ -125,5 +126,7 @@ if __name__ == "__main__":
 		data = f.read()
 	
 	compressed = wflz_compress(data)
-	with open(f"{path}.wflz") as f:
+	with open(f"{path}.wflz", "wb") as f:
 		f.write(compressed)
+	
+	print("success!")
