@@ -65,8 +65,14 @@ for i in range(8):
 				"data_size": raw_metadata[18],
 			})
 			
+			clean_metadata = image_metadata[-1].copy()
+			# the values being deleted here are stuff that can be reconstructed from a png
+			del clean_metadata["width"]
+			del clean_metadata["height"]
+			del clean_metadata["data_size"]
+			
 			with open(f"{explode_folder_path}/image {j} metadata.json", "w") as meta_write_file:
-				json.dump(image_metadata[-1], meta_write_file)
+				json.dump(clean_metadata, meta_write_file)
 	elif i == 7: # image data (wflz)
 		for j in range(header_rows[i]["entry_count"]):
 			(pointer,) = struct.unpack("<Q", row_data[j*8 : j*8 + 8])
