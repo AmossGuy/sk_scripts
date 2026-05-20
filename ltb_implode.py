@@ -5,6 +5,9 @@ import os
 import struct
 import sys
 
+from PIL import Image
+from wflz_compress import wflz_compress
+
 def ensure_alignment(f):
 	pos = f.tell()
 	if (pos % 8) != 0:
@@ -28,6 +31,7 @@ ltb_file = open(ltb_file_path, "wb")
 ltb_file.write(b"\0" * 16 * 9)
 
 row_data_pointers = []
+images = [] # we put all the image data in here at once. not optimal memory use? whatever
 for i in range(8):
 	row_data_pointers.append(ltb_file.tell())
 	count = header_json["rows"][i]["entry_count"]
@@ -37,17 +41,27 @@ for i in range(8):
 			with open(f"{folder_path}/image {j} metadata.json", "r") as metadata_file:
 				metadata_json = json.load(metadata_file)
 			
+			image = Image.open(f"{folder_path}/image {j}.png")
+			correct_image_mode = "RGBA" if metadata_json["palettes"][0] == 0xFF_FF_FF_FF else "L"
+			if image.mode != correct_image_mode:
+				raise ValueError(f"image {j} has the wrong pixel format")
+			
+			image_data = image.tobytes()
+			if metadata_json["compression"] != 0:
+				image_data = wflz_compress(image_data)
+			images.append(image_data)
+			
 			ltb_file.write(struct.pack(
 				"<" + "I" * 19,
 				metadata_json["unknown_a"],
 				metadata_json["compression"],
-				metadata_json["width"],
-				metadata_json["height"],
+				image.size[0],
+				image.size[1],
 				metadata_json["unknown_b"],
 				metadata_json["unknown_c"],
 				*metadata_json["palettes"],
 				metadata_json["unknown_d"],
-				os.path.getsize(f"{folder_path}/image {j}.wflz"),
+				len(image_data),
 			))
 	elif i == 7:
 		image_data_metapointer = ltb_file.tell()
@@ -57,8 +71,7 @@ for i in range(8):
 		image_data_pointers = []
 		for j in range(count):
 			image_data_pointers.append(ltb_file.tell())
-			with open(f"{folder_path}/image {j}.wflz", "rb") as wflz_data_file:
-				ltb_file.write(wflz_data_file.read())
+			ltb_file.write(images[j])
 		
 		ltb_file.seek(image_data_metapointer)
 		ltb_file.write(struct.pack("<" + "Q" * count, *image_data_pointers))
