@@ -57,8 +57,6 @@ def wflz_compress(data):
 			wflz_dict[whash] = read_pos
 		block.literals.append(data[read_pos])
 		read_pos += 1
-	block.write_to(writer)
-	block = WflzBlock()
 	
 	# main loop
 	while len(data) - read_pos >= WFLZ_MIN_MATCH_LEN:
