@@ -6,46 +6,89 @@ import struct
 WFLZ_HEADER_SIZE = 4 * 3
 WFLZ_BLOCK_SIZE = 4
 
+WFLZ_MAX_MATCH_DIST = 0xFFFF
 WFLZ_MIN_MATCH_LEN = WFLZ_BLOCK_SIZE + 1
+WFLZ_MAX_MATCH_LEN = 0xFF - 1 + WFLZ_MIN_MATCH_LEN
 WFLZ_MAX_LITERALS = 0xFF
 
-def wlfz_hashptr(x):
+def wflz_hash(b):
+	assert len(b) == 4
+	x = (int.from_bytes(b, "little"))
 	# the original wflz source uses some fancy macros to calculate that 16, but in the end it's just a constant
 	return ((x * 2654435761) & 0xFF_FF_FF_FF) >> 16
 
-def wlfz_compress(data):
+# called wfLZ_MemCmp in the original
+# "returns the number of sequential matching characters"
+def wflz_compare(data, start_a, start_b, max_len):
+	max_len = min(max_len, len(data))
+	matched = 0
+	while matched < max_len and data[start_a + matched] == data[start_b + matched]:
+		matched += 1
+	return matched
+
+class WflzBlock:
+	def __init__(self):
+		self.backref_dist = 0
+		self.backref_length = 0
+		self.literals = bytearray(b"")
+	
+	def write_to(self, writer):
+		writer.write(struct.pack("<HBB", self.backref_dist, self.backref_length, len(self.literals)))
+		writer.write(self.literals)
+
+def wflz_compress(data):
 	writer = io.BytesIO()
 	
 	# reserve space for header. we won't actually write it until we're finished compressing and know the compressed size
 	writer.write(b"\xFF" * WFLZ_HEADER_SIZE)
 	
+	# hash table, with a starring role in this compression scheme
+	# sequences of 4 bytes are turned into a 32-bit integer and hashed with wflz_hash; that hash is used as an index into this table
+	# the values of this table are indexes into the data, pointing to where those bytes sequences can be found
+	wflz_dict = [None] * 0xFFFF
+	
+	block = WflzBlock()
 	read_pos = 0
-	wflz_dict = b"\0" * 0xFFFF
-	block_literals = bytearray(b"")
 	
 	# firstly: the first WFLZ_MIN_MATCH_LEN bytes of the data are always written as literals
 	for _ in range(min(WFLZ_MIN_MATCH_LEN, len(data))):
 		if len(data) - read_pos >= 4:
-			pass # TODO: add to dict
-		block_literals.append(data[read_pos])
+			whash = wflz_hash(data[read_pos:read_pos+4])
+			wflz_dict[whash] = read_pos
+		block.literals.append(data[read_pos])
 		read_pos += 1
-	writer.write(struct.pack("<HBB", 0, 0, len(block_literals)))
-	writer.write(block_literals)
-	block_literals = bytearray(b"")
+	block.write_to(writer)
+	block = WflzBlock()
 	
-	# TODO: main loop
-	# writer.write(struct.pack("<HBB", ))
+	"""
+	# main loop
+	while len(data) - read_pos >= WFLZ_MIN_MATCH_LEN:
+		whash = wflz_hash(data[read_pos:read_pos+4])
+		match_pos = wflz_dict[whash]
+		window_start = read_pos - WFLZ_MAX_MATCH_DIST
+		match_length = 0
+		
+		wflz_dict[whash] = read_pos
+		
+		# "a match was found, ensure it really is a match and not a hash collision, and determine its length"
+		if match_pos != None and match_pos >= window_start:
+			match_length = wflz_compare(data, read_pos, match_pos, WFLZ_MAX_MATCH_LEN)
+		
+		# TODO: the big if/else
+		if match_length >= WFLZ_MIN_MATCH_LEN:
+			pass
+		else:
+			pass
+	"""
 	
 	# final literals
 	while read_pos < len(data):
-		if len(block_literals) == WFLZ_MAX_LITERALS:
-			writer.write(struct.pack("<HBB", 0, 0, len(block_literals)))
-			writer.write(block_literals)
-			block_literals = bytearray(b"")
-		block_literals.append(data[read_pos])
+		if len(block.literals) == WFLZ_MAX_LITERALS:
+			block.write_to(writer)
+			block = WflzBlock()
+		block.literals.append(data[read_pos])
 		read_pos += 1
-	writer.write(struct.pack("<HBB", 0, 0, len(block_literals)))
-	writer.write(block_literals) # no need to erase it this time since we're already done
+	block.write_to(writer) # no need for a new block this time since we're already done
 	
 	# add terminator block
 	writer.write(b"\0" * WFLZ_BLOCK_SIZE)
@@ -61,4 +104,4 @@ def wlfz_compress(data):
 	return compressed_data
 
 if __name__ == "__main__":
-	print(wlfz_compress(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer purus elit, vulputate sed vehicula quis, lobortis nec velit. Etiam blandit non est at laoreet. Praesent eleifend dignissim lacus, a auctor tortor dignissim sit amet. In ut ornare diam, ut molestie nisl. Suspendisse in elementum lorem, ut ullamcorper ipsum. Quisque libero leo, ultricies at maximus non, pellentesque non erat. Praesent convallis tincidunt mollis."))
+	print(wflz_compress(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer purus elit, vulputate sed vehicula quis, lobortis nec velit. Etiam blandit non est at laoreet. Praesent eleifend dignissim lacus, a auctor tortor dignissim sit amet. In ut ornare diam, ut molestie nisl. Suspendisse in elementum lorem, ut ullamcorper ipsum. Quisque libero leo, ultricies at maximus non, pellentesque non erat. Praesent convallis tincidunt mollis."))
