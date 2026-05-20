@@ -60,7 +60,6 @@ def wflz_compress(data):
 	block.write_to(writer)
 	block = WflzBlock()
 	
-	"""
 	# main loop
 	while len(data) - read_pos >= WFLZ_MIN_MATCH_LEN:
 		whash = wflz_hash(data[read_pos:read_pos+4])
@@ -76,10 +75,21 @@ def wflz_compress(data):
 		
 		# TODO: the big if/else
 		if match_length >= WFLZ_MIN_MATCH_LEN:
-			pass
+			block.write_to(writer)
+			block = WflzBlock()
+			read_pos += match_length
+			
+			block.backref_dist = read_pos - match_pos
+			block.backref_length = match_length - WFLZ_MIN_MATCH_LEN + 1
+		# "output a literal byte: no entries for this position found, entry is too far away, entry was a hash collision, or the entry did not meet the minimum match length"
 		else:
-			pass
-	"""
+			# "if we've hit the max number of sequential literals, we need to output a compression block header"
+			if len(block.literals) == WFLZ_MAX_LITERALS:
+				block.write_to(writer)
+				block = WflzBlock()
+			
+			block.literals.append(data[read_pos])
+			read_pos += 1
 	
 	# final literals
 	while read_pos < len(data):
