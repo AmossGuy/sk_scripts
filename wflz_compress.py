@@ -2,6 +2,7 @@
 
 import io
 import struct
+import sys
 
 WFLZ_HEADER_SIZE = 4 * 3
 WFLZ_BLOCK_SIZE = 4
@@ -114,4 +115,15 @@ def wflz_compress(data):
 	return compressed_data
 
 if __name__ == "__main__":
-	print(wflz_compress(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer purus elit, vulputate sed vehicula quis, lobortis nec velit. Etiam blandit non est at laoreet. Praesent eleifend dignissim lacus, a auctor tortor dignissim sit amet. In ut ornare diam, ut molestie nisl. Suspendisse in elementum lorem, ut ullamcorper ipsum. Quisque libero leo, ultricies at maximus non, pellentesque non erat. Praesent convallis tincidunt mollis."))
+	if len(sys.argv) != 2:
+		print("tool requires exactly one argument: the path to some raw data to compress")
+		print("the compressed version is created adjacent to this file")
+		sys.exit(1)
+	
+	path = sys.argv[1]
+	with open(path, "rb") as f:
+		data = f.read()
+	
+	compressed = wflz_compress(data)
+	with open(f"{path}.wflz") as f:
+		f.write(compressed)
