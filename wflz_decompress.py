@@ -4,22 +4,29 @@ import io
 import struct
 import sys
 
-def wflz_decompress(data):
-	writer = io.BytesIO()
+def wflz_decompress(reader):
+	output = bytearray(b"")
 	
-	magic = data[0:4]
+	magic = reader.read(4)
 	if magic == b"ZLFW":
 		raise ValueError("chunked wflz format is not supported by this script")
 	elif magic != b"WFLZ":
 		raise ValueError("unknown magic. are you sure this is wflz data?")
 	
-	(compressed_size, decompressed_size) = struct.unpack("<II", data[4:4+8])
+	(compressed_size, decompressed_size) = struct.unpack("<II", reader.read(8))
 	
-	# TODO
+	while True:
+		block = reader.read(4)
+		if block == b"\0\0\0\0":
+			break
+		
+		(backref_dist, backref_length, literal_count) = struct.unpack("<HBB", block)
+		literals = reader.read(literal_count)
+		
+		output.extend(literals)
+		# TODO: handle backrefs
 	
-	decompressed_data = writer.getvalue()
-	writer.close()
-	return decompressed_data
+	return output
 
 if __name__ == "__main__":
 	if len(sys.argv) != 2:
@@ -29,10 +36,8 @@ if __name__ == "__main__":
 	
 	path = sys.argv[1]
 	with open(path, "rb") as f:
-		data = f.read()
-	
-	compressed = wflz_decompress(data)
+		decompressed = wflz_decompress(f)
 	with open(f"{path} decompressed", "wb") as f:
-		f.write(compressed)
+		f.write(decompressed)
 	
 	print("success!")
