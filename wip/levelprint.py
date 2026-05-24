@@ -629,21 +629,13 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
         xml_layer.set("height", str(layer.endY - layer.startY + 1))
         xml_layer.set("offsetx", str(layer.startX * 16))
         xml_layer.set("offsety", str(layer.startY * 16))
+        xml_layer.set("parallaxx", str(1 - layer.cameraMultX))
+        xml_layer.set("parallaxy", str(layer.cameraMultY))
         xml_layer.set("visible", str(visible))
         layer_id += 1
 
         xml_data = SubElement(xml_layer, "data")
         xml_data.set("encoding", "csv")
-
-        xml_properties = SubElement(xml_layer, "properties")
-        xml_property = SubElement(xml_properties, "property")
-        xml_property.set("name", "SCROLL_X_MULT")
-        xml_property.set("type", "float")
-        xml_property.set("value", "%f" % layer.cameraMultX)
-        xml_property = SubElement(xml_properties, "property")
-        xml_property.set("name", "SCROLL_Y_MULT")
-        xml_property.set("type", "float")
-        xml_property.set("value", "%f" % layer.cameraMultY)
 
         if layer.isUsingStaticVertexBuffer != 0:
             csv = ""
