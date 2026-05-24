@@ -516,6 +516,9 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
 
     print("width %d height %d size %d" % (paletteInfo.width, paletteInfo.height, paletteInfo.size))
 
+    if not os.path.exists("../Scenes"):
+        os.makedirs("../Scenes")
+
     wflz = WFLZ()
     tileset_export_list = []
     for i in range(len(ltb.attachedFileList)):
