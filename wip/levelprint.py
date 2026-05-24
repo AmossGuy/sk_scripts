@@ -517,17 +517,21 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
     print("width %d height %d size %d" % (paletteInfo.width, paletteInfo.height, paletteInfo.size))
 
     wflz = WFLZ()
+    tileset_export_list = []
     for i in range(len(ltb.attachedFileList)):
-        image_file_name = "../Scenes/" + map_name + "_image_%d.png" % i
+        image_file_name = map_name + "_image_%d.png" % i
+        image_path = "../Scenes/" + image_file_name
         ltb.file.seek(ltb.ltb_start + ltb.attachedFileList[i])
 
         info = ltb.textureFormatInfoList[i]
         if info.isCompressed != 0:
+            tileset_export_list.append({"image_name": image_file_name, "columns": info.width // 18, "rows": info.height // 18})
+
             bytearr = wflz.decomp_file(ltb.file)
 
             if info.width * info.height * 4 == len(bytearr):
                 image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
-                image.save(image_file_name)
+                image.save(image_path)
             else:
                 bytearrRGBA = [0] * len(bytearr) * 4
                 for c in range(len(bytearr)):
@@ -537,12 +541,12 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
                     bytearrRGBA[c * 4 + 2] = paletteBytes[cp + 2]
                     bytearrRGBA[c * 4 + 3] = paletteBytes[cp + 3]
                 image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearrRGBA), 'raw')
-                image.save(image_file_name)
+                image.save(image_path)
         else:
             bytearr = ltb.file.read(info.size)
             if info.width * info.height * 4 == len(bytearr):
                 image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
-                image.save(image_file_name)
+                image.save(image_path)
 
     layer_id = 1
     object_id = 1
@@ -563,12 +567,19 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
     comment = Comment("Generated using ShovelKnightRE: https://github.com/aknetk/ShovelKnightRE")
     xml_map.append(comment)
 
-    xml_tileset = SubElement(xml_map, "tileset")
-    xml_tileset.set("firstgid", "1")
-    xml_tileset.set("source", "Plains.tsx")
-    xml_tileset = SubElement(xml_map, "tileset")
-    xml_tileset.set("firstgid", "785")
-    xml_tileset.set("source", "PlainsWaterfall.tsx")
+    firstgid = 1
+    for tileset in tileset_export_list:
+        xml_tileset = SubElement(xml_map, "tileset")
+        xml_tileset.set("firstgid", str(firstgid))
+        xml_tileset.set("name", Path(tileset["image_name"]).stem)
+        xml_tileset.set("tilewidth", "16")
+        xml_tileset.set("tileheight", "16")
+        xml_tileset.set("spacing", "2")
+        xml_tileset.set("margin", "1")
+        xml_tileset.set("tilecount", str(tileset["columns"] * tileset["rows"]))
+        xml_tileset.set("columns", str(tileset["columns"]))
+        SubElement(xml_tileset, "image", source=tileset["image_name"])
+        firstgid += tileset["columns"] * tileset["rows"]
 
     tilebuffer = [[0] * 64 for i in range(64)]
 
@@ -598,9 +609,6 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
         cell_x = math.floor(u / 18.0)
         cell_y = math.floor(v / 18.0)
         tilebuffer[tile_x][tile_y] = math.floor(cell_x + cell_y * columncount) + 1
-
-    normal_tile_count = 401
-    first_sheet_tile_count = 784
 
     layerList_string = ""
     for i in range(len(ltb.layerInfoList)):
@@ -650,6 +658,7 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
         else:
             chunk_text = ""
             chunkStart = layer.chunkIDStart
+            print(layer)
             for cy in range(layer.chunkYCount):
                 for cx in range(layer.chunkXCount):
                     chunkID = chunkStart + cx + cy * layer.chunkXCount
@@ -666,8 +675,8 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
                                 tile_id = tiledata & 0xFFF
                                 tiled_out = tile_id
 
-                                if "BGWATERFALL" in layer.name.decode():
-                                    tiled_out += first_sheet_tile_count
+                                if tiledata & 0x1000:
+                                    tiled_out += tileset_export_list[0]["columns"] * tileset_export_list[0]["rows"]
 
                                 if tiled_out != 0:
                                     if flip_x != 0:
