@@ -510,6 +510,40 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
     # print("Discovered %d / %d" % (discovered, discoveredMax))
     # print("")
 
+    paletteInfo = ltb.textureFormatInfoList[0]
+    ltb.file.seek(ltb.ltb_start + ltb.attachedFileList[0])
+    paletteBytes = ltb.file.read(paletteInfo.size)
+
+    print("width %d height %d size %d" % (paletteInfo.width, paletteInfo.height, paletteInfo.size))
+
+    wflz = WFLZ()
+    for i in range(len(ltb.attachedFileList)):
+        image_file_name = "../Scenes/" + map_name + "_image_%d.png" % i
+        ltb.file.seek(ltb.ltb_start + ltb.attachedFileList[i])
+
+        info = ltb.textureFormatInfoList[i]
+        if info.isCompressed != 0:
+            bytearr = wflz.decomp_file(ltb.file)
+
+            if info.width * info.height * 4 == len(bytearr):
+                image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
+                image.save(image_file_name)
+            else:
+                bytearrRGBA = [0] * len(bytearr) * 4
+                for c in range(len(bytearr)):
+                    cp = int(bytearr[c] * 32 / 255) << 2
+                    bytearrRGBA[c * 4 + 0] = paletteBytes[cp + 0]
+                    bytearrRGBA[c * 4 + 1] = paletteBytes[cp + 1]
+                    bytearrRGBA[c * 4 + 2] = paletteBytes[cp + 2]
+                    bytearrRGBA[c * 4 + 3] = paletteBytes[cp + 3]
+                image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearrRGBA), 'raw')
+                image.save(image_file_name)
+        else:
+            bytearr = ltb.file.read(info.size)
+            if info.width * info.height * 4 == len(bytearr):
+                image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
+                image.save(image_file_name)
+
     layer_id = 1
     object_id = 1
 
@@ -725,39 +759,6 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
 
     open("../Scenes/" + map_name + ".tmx", "w").write(prettifyXML(xml_map))
 
-    paletteInfo = ltb.textureFormatInfoList[0]
-    ltb.file.seek(ltb.ltb_start + ltb.attachedFileList[0])
-    paletteBytes = ltb.file.read(paletteInfo.size)
-
-    print("width %d height %d size %d" % (paletteInfo.width, paletteInfo.height, paletteInfo.size))
-
-    wflz = WFLZ()
-    for i in range(len(ltb.attachedFileList)):
-        image_file_name = "../Scenes/" + map_name + "_image_%d.png" % i
-        ltb.file.seek(ltb.ltb_start + ltb.attachedFileList[i])
-
-        info = ltb.textureFormatInfoList[i]
-        if info.isCompressed != 0:
-            bytearr = wflz.decomp_file(ltb.file)
-
-            if info.width * info.height * 4 == len(bytearr):
-                image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
-                image.save(image_file_name)
-            else:
-                bytearrRGBA = [0] * len(bytearr) * 4
-                for c in range(len(bytearr)):
-                    cp = int(bytearr[c] * 32 / 255) << 2
-                    bytearrRGBA[c * 4 + 0] = paletteBytes[cp + 0]
-                    bytearrRGBA[c * 4 + 1] = paletteBytes[cp + 1]
-                    bytearrRGBA[c * 4 + 2] = paletteBytes[cp + 2]
-                    bytearrRGBA[c * 4 + 3] = paletteBytes[cp + 3]
-                image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearrRGBA), 'raw')
-                image.save(image_file_name)
-        else:
-            bytearr = ltb.file.read(info.size)
-            if info.width * info.height * 4 == len(bytearr):
-                image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
-                image.save(image_file_name)
     print("")
 
 if __name__ == '__main__':
