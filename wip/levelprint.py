@@ -522,7 +522,7 @@ def LTBandLVBtoTiled(ltb, lvb, map_name):
     xml_map.set("height", "25")
     xml_map.set("tilewidth", "16")
     xml_map.set("tileheight", "16")
-    xml_map.set("infinite", "0")
+    xml_map.set("infinite", "1")
     # xml_map.set("nextlayerid", "3")
     # xml_map.set("nextobjectid", "2")
 
