@@ -485,7 +485,7 @@ class LVBClass:
 
         return
 
-def LTBandLVBtoTiled(ltb, lvb):
+def LTBandLVBtoTiled(ltb, lvb, map_name):
     # Player pos 90.4 -468.99
 
     objectNameDict = {
@@ -1526,8 +1526,6 @@ def LTBandLVBtoTiled(ltb, lvb):
     # print("Discovered %d / %d" % (discovered, discoveredMax))
     # print("")
 
-    map_name = "Plains"
-
     layer_id = 1
     object_id = 1
 
@@ -1751,6 +1749,7 @@ def LTBandLVBtoTiled(ltb, lvb):
 
     wflz = WFLZ()
     for i in range(len(ltb.attachedFileList)):
+        image_file_name = "../Scenes/" + map_name + "_image_%d.png" % i
         ltb.file.seek(ltb.ltb_start + ltb.attachedFileList[i])
 
         info = ltb.textureFormatInfoList[i]
@@ -1759,7 +1758,7 @@ def LTBandLVBtoTiled(ltb, lvb):
 
             if info.width * info.height * 4 == len(bytearr):
                 image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
-                image.save("file_name_%d.png" % i)
+                image.save(image_file_name)
             else:
                 bytearrRGBA = [0] * len(bytearr) * 4
                 for c in range(len(bytearr)):
@@ -1769,12 +1768,12 @@ def LTBandLVBtoTiled(ltb, lvb):
                     bytearrRGBA[c * 4 + 2] = paletteBytes[cp + 2]
                     bytearrRGBA[c * 4 + 3] = paletteBytes[cp + 3]
                 image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearrRGBA), 'raw')
-                image.save("file_name_%d.png" % i)
+                image.save(image_file_name)
         else:
             bytearr = ltb.file.read(info.size)
             if info.width * info.height * 4 == len(bytearr):
                 image = Image.frombytes('RGBA', (info.width, info.height), bytes(bytearr), 'raw')
-                image.save("file_name_%d.png" % i)
+                image.save(image_file_name)
     print("")
 
 if __name__ == '__main__':
@@ -1792,7 +1791,7 @@ if __name__ == '__main__':
     # os.chdir(Path(sys.argv[1]).parent)
     ltb = LTBClass(Path(sys.argv[1]))
     lvb = LVBClass(Path(sys.argv[2]))
-    LTBandLVBtoTiled(ltb, lvb)
+    LTBandLVBtoTiled(ltb, lvb, Path(sys.argv[1]).stem)
     # LTBandLVBtoRSDKScene(ltb, lvb, "Plains")
 
 _exit("Log: Program finished.")
