@@ -1,3 +1,9 @@
+"""
+Note: This script is a fork of aknetk's work. The original can be found here:
+
+https://github.com/aknetk/ShovelKnightRE/blob/91b98d9ac3a0706f68eda3ef77202f6069e305cb/levelprint.py
+"""
+
 import sys
 import struct
 from collections import namedtuple
@@ -717,7 +723,7 @@ class LTBClass:
         # fpath = "levels/core/plainsOfPassage.ltb"
         # print("File Hash: 0x%08X" % YCG_Hash(fpath, len(fpath), 123456789))
 
-        self.ltb_start = ltb_start = 0x10
+        self.ltb_start = ltb_start = 0
         file.seek(ltb_start)
 
         layerFormatHeader = struct.unpack("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII", file.read(0x90))
@@ -840,7 +846,7 @@ class LVBClass:
         file = self.file
         # path_hash = unpack(file, 4)
 
-        self.lvb_start = lvb_start = 0x10
+        self.lvb_start = lvb_start = 0
         file.seek(lvb_start)
 
         # header = struct.unpack("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII", file.read(0x150))
