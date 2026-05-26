@@ -67,7 +67,7 @@ def explode_chunk_tilemaps(folder_path, fi, data_length):
 	while (offset + CHUNK_BYTES) <= data_length:
 		chunk_data = fi.read(CHUNK_BYTES)
 		
-		with open(chunk_folder / f"offset_{offset}.csv", "w", newline="") as csvfile:
+		with open(chunk_folder / f"offset_{offset // 2}.csv", "w", newline="") as csvfile:
 			writer = csv.writer(csvfile)
 			for i, row_values in enumerate(struct.iter_unpack(structformat, chunk_data)):
 				writer.writerow(map(tile_string, row_values))
