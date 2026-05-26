@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import namedtuple
 import csv
 import io
 import json
@@ -21,6 +22,19 @@ row_entry_sizes = [
 	4 * 5,
 	8,
 ]
+
+def explode_layer_headers(folder_path, fi, count):
+	LayerInfo = namedtuple("LayerInfo", "name nameHash unk1 unk2 cameraMultX unk3 cameraMultY unk4 unk5 unk6 unkI7 unkI8 unkI9 vertexBufferInfoIndex isUsingStaticVertexBuffer unkI10 chunkXCount chunkYCount chunkIDStart offsetX offsetY startX startY endX endY")
+	
+	layers = []
+	for i in range(count):
+		layer_info = LayerInfo(*struct.unpack("<32sIffffffffIIIIIIIIIffIIII", fi.read(0x80)))
+		layer_info = layer_info._asdict()
+		layer_info["name"] = layer_info["name"].split(b"\0")[0].decode()
+		layers.append(layer_info)
+	
+	with open(Path(folder_path) / "layers.json", "w") as json_file:
+		json.dump(layers, json_file, indent="\t")
 
 CHUNK_SIZE = 16
 CHUNK_BYTES = CHUNK_SIZE * CHUNK_SIZE * 2
@@ -80,7 +94,9 @@ image_metadata = []
 for i in range(8):
 	ltb_file.seek(row_pointers[i])
 	row_data = ltb_file.read(header_rows[i]["entry_count"] * row_entry_sizes[i])
-	if i == 2: # image metadata
+	if i == 0:
+		explode_layer_headers(explode_folder_path, io.BytesIO(row_data), header_rows[i]["entry_count"])
+	elif i == 2: # image metadata
 		for j in range(header_rows[i]["entry_count"]):
 			raw_metadata = struct.unpack("<" + "I"*19, row_data[j*4*19 : j*4*19 + 4*19])
 			image_metadata.append({
