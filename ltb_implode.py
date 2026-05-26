@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+from collections import namedtuple
 import json
 import os
+from pathlib import Path
 import struct
 import sys
 
@@ -12,6 +14,19 @@ def ensure_alignment(f):
 	pos = f.tell()
 	if (pos % 8) != 0:
 		f.write(b"\0" * (8 - (pos % 8)))
+
+def implode_layer_headers(folder_path, writer):
+	LayerInfo = namedtuple("LayerInfo", "name nameHash unk1 unk2 cameraMultX unk3 cameraMultY unk4 unk5 unk6 unkI7 unkI8 unkI9 vertexBufferInfoIndex isUsingStaticVertexBuffer unkI10 chunkXCount chunkYCount chunkIDStart offsetX offsetY startX startY endX endY")
+	
+	with open(Path(folder_path) / "layers.json", "r") as json_file:
+		layers = json.load(json_file)
+	
+	for layer in layers:
+		layer["name"] = layer["name"].encode()
+		layer_tuple = LayerInfo(**layer)
+		writer.write(struct.pack("<32sIffffffffIIIIIIIIIffIIII", *layer_tuple))
+	
+	return len(layers)
 
 if len(sys.argv) != 2:
 	print("tool requires exactly one argument: the exploded folder path")
@@ -36,7 +51,10 @@ for i in range(8):
 	row_data_pointers.append(ltb_file.tell())
 	count = header_json["rows"][i]["entry_count"]
 	
-	if i == 2:
+	if i == 0:
+		count = implode_layer_headers(folder_path, ltb_file)
+		# TODO: adjust header for different numbers of layers
+	elif i == 2:
 		for j in range(count):
 			with open(f"{folder_path}/image {j} metadata.json", "r") as metadata_file:
 				metadata_json = json.load(metadata_file)
