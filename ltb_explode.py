@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+import csv
 import io
 import json
 import os
+from pathlib import Path
 import struct
 import sys
 
@@ -19,6 +21,34 @@ row_entry_sizes = [
 	4 * 5,
 	8,
 ]
+
+CHUNK_SIZE = 16
+CHUNK_BYTES = CHUNK_SIZE * CHUNK_SIZE * 2
+
+def explode_chunk_tilemaps(folder_path, fi, data_length):
+	fi.read(2) # ignore initial padding
+	chunk_folder = Path(folder_path) / "chunks"
+	chunk_folder.mkdir(exist_ok=True)
+	structformat = "<" + "H" * CHUNK_SIZE
+	
+	offset = 2
+	while (offset + CHUNK_BYTES) <= data_length:
+		chunk_data = fi.read(CHUNK_BYTES)
+		
+		with open(chunk_folder / f"offset_{offset}.csv", "w", newline="") as csvfile:
+			writer = csv.writer(csvfile)
+			for i, row_values in enumerate(struct.iter_unpack(structformat, chunk_data)):
+				writer.writerow(map(tile_string, row_values))
+		
+		offset += CHUNK_BYTES
+
+def tile_string(raw):
+	string = str(raw & 0xFFF)
+	if raw & 0x1000: string += "p" # second tileset page
+	if raw & 0x2000: string += "h" # horizontal flip
+	if raw & 0x4000: string += "v" # vertical flip
+	if raw & 0x8000: string += "s" # solid tile?
+	return string
 
 if len(sys.argv) != 2:
 	print("tool requires exactly one argument: the ltb file path")
@@ -73,6 +103,8 @@ for i in range(8):
 			
 			with open(f"{explode_folder_path}/image {j} metadata.json", "w") as meta_write_file:
 				json.dump(clean_metadata, meta_write_file)
+	elif i == 4:
+		explode_chunk_tilemaps(explode_folder_path, io.BytesIO(row_data), len(row_data))
 	elif i == 7: # image data (wflz)
 		for j in range(header_rows[i]["entry_count"]):
 			(pointer,) = struct.unpack("<Q", row_data[j*8 : j*8 + 8])
