@@ -35,6 +35,24 @@ def explode_layer_headers(folder_path, fi, count):
 	
 	with open(Path(folder_path) / "layers.json", "w") as json_file:
 		json.dump(layers, json_file, indent="\t")
+	return layers
+
+def explode_layer_chunkmaps(folder_path, data, layers):
+	layer_folder = Path(folder_path) / "layers"
+	layer_folder.mkdir(exist_ok=True)
+	offset_str = lambda s: "" if s == 0 else f"offset_{s}"
+	
+	seeker = io.BytesIO(data)
+	for layer in layers:
+		structformat = "<" + "I" * layer["chunkXCount"]
+		structsize = struct.calcsize(structformat)
+		
+		seeker.seek(layer["chunkIDStart"] * 4)
+		with open(layer_folder / f"{layer['name']}.csv", "w", newline="") as csvfile:
+			writer = csv.writer(csvfile)
+			for row_n in range(layer["chunkYCount"]):
+				row_values = struct.unpack(structformat, seeker.read(structsize))
+				writer.writerow(map(offset_str, row_values))
 
 CHUNK_SIZE = 16
 CHUNK_BYTES = CHUNK_SIZE * CHUNK_SIZE * 2
@@ -95,7 +113,7 @@ for i in range(8):
 	ltb_file.seek(row_pointers[i])
 	row_data = ltb_file.read(header_rows[i]["entry_count"] * row_entry_sizes[i])
 	if i == 0:
-		explode_layer_headers(explode_folder_path, io.BytesIO(row_data), header_rows[i]["entry_count"])
+		exploded_layers = explode_layer_headers(explode_folder_path, io.BytesIO(row_data), header_rows[i]["entry_count"])
 	elif i == 2: # image metadata
 		for j in range(header_rows[i]["entry_count"]):
 			raw_metadata = struct.unpack("<" + "I"*19, row_data[j*4*19 : j*4*19 + 4*19])
@@ -119,6 +137,8 @@ for i in range(8):
 			
 			with open(f"{explode_folder_path}/image {j} metadata.json", "w") as meta_write_file:
 				json.dump(clean_metadata, meta_write_file)
+	elif i == 3:
+		explode_layer_chunkmaps(explode_folder_path, row_data, exploded_layers)
 	elif i == 4:
 		explode_chunk_tilemaps(explode_folder_path, io.BytesIO(row_data), len(row_data))
 	elif i == 7: # image data (wflz)
