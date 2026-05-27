@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 from collections import namedtuple
+import csv
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import sys
 
@@ -15,18 +17,61 @@ def ensure_alignment(f):
 	if (pos % 8) != 0:
 		f.write(b"\0" * (8 - (pos % 8)))
 
-def implode_layer_headers(folder_path, writer):
+tile_encode_regex = re.compile("^([0-9]+)([a-zA-Z]*)$")
+
+def tile_encode(s):
+	match = tile_encode_regex.match(s)
+	tile_index = int(match.group(1))
+	flag_string = match.group(2).lower()
+	
+	n = tile_index & 0xFFF
+	if "p" in flag_string: n |= 0x1000
+	if "h" in flag_string: n |= 0x2000
+	if "v" in flag_string: n |= 0x4000
+	if "s" in flag_string: n |= 0x8000
+	return n
+
+CHUNK_SIZE = 16
+CHUNK_BYTES = CHUNK_SIZE * CHUNK_SIZE * 2
+
+class TilemapBuilder:
+	def __init__(self, folder_path):
+		self.folder_path = folder_path
+		self.chunk_data = bytearray(b"\0\0")
+		self.chunk_dict = {}
+		self.layer_data = bytearray(b"")
+		self.layer_dict = {}
+	
+	def load_chunk(self, name):
+		if name not in self.chunk_dict:
+			pointer = len(self.chunk_data)
+			self.chunk_dict[name] = pointer
+			with open(Path(self.folder_path) / "chunks" / f"{name}.csv", "r", newline="") as csvfile:
+				reader = csv.reader(csvfile)
+				for row in reader:
+					row_data = struct.pack("<" + "H" * CHUNK_SIZE, *map(tile_encode, row))
+					self.chunk_data.extend(row_data)
+		return self.chunk_dict[name]
+	
+	def load_layer(self, name):
+		layer_pointer = len(self.layer_data) // 4
+		with open(Path(self.folder_path) / "layers" / f"{name}.csv", "r", newline="") as csvfile:
+			reader = csv.reader(csvfile)
+			for row in reader:
+				for chunk_name in row:
+					if chunk_name == "":
+						self.layer_data.extend(struct.pack("<I", 0))
+					else:
+						self.layer_data.extend(struct.pack("<I", self.load_chunk(chunk_name)))
+		return layer_pointer
+
+def implode_layer_headers(folder_path, writer, json_layers):
 	LayerInfo = namedtuple("LayerInfo", "name nameHash unk1 unk2 cameraMultX unk3 cameraMultY unk4 unk5 unk6 unkI7 unkI8 unkI9 vertexBufferInfoIndex isUsingStaticVertexBuffer unkI10 chunkXCount chunkYCount chunkIDStart offsetX offsetY startX startY endX endY")
 	
-	with open(Path(folder_path) / "layers.json", "r") as json_file:
-		layers = json.load(json_file)
-	
-	for layer in layers:
+	for layer in json_layers:
 		layer["name"] = layer["name"].encode()
 		layer_tuple = LayerInfo(**layer)
 		writer.write(struct.pack("<32sIffffffffIIIIIIIIIffIIII", *layer_tuple))
-	
-	return len(layers)
 
 if len(sys.argv) != 2:
 	print("tool requires exactly one argument: the exploded folder path")
@@ -45,6 +90,14 @@ ltb_file = open(ltb_file_path, "wb")
 # here we reserve a placeholder to replace with the actual header later
 ltb_file.write(b"\0" * 16 * 9)
 
+# tilemap is a bit complicated and needs to be sorted out before the layer headers so we have the pointers by then
+with open(Path(folder_path) / "layers.json", "r") as json_file:
+	json_layers = json.load(json_file)
+tilemap_builder = TilemapBuilder(folder_path)
+for layer in json_layers:
+	layer_pointer = tilemap_builder.load_layer(layer["name"])
+	layer["chunkIDStart"] = layer_pointer
+
 row_data_pointers = []
 images = [] # we put all the image data in here at once. not optimal memory use? whatever
 for i in range(8):
@@ -52,8 +105,9 @@ for i in range(8):
 	count = header_json["rows"][i]["entry_count"]
 	
 	if i == 0:
-		count = implode_layer_headers(folder_path, ltb_file)
+		implode_layer_headers(folder_path, ltb_file, json_layers)
 		# TODO: adjust header for different numbers of layers
+		# len(json_layers)
 	elif i == 2:
 		for j in range(count):
 			with open(f"{folder_path}/image {j} metadata.json", "r") as metadata_file:
@@ -81,6 +135,10 @@ for i in range(8):
 				metadata_json["unknown_d"],
 				len(image_data),
 			))
+	elif i == 3:
+		ltb_file.write(tilemap_builder.layer_data)
+	elif i == 4:
+		ltb_file.write(tilemap_builder.chunk_data)
 	elif i == 7:
 		image_data_metapointer = ltb_file.tell()
 		# again, we can only write pointers after the things they point to
