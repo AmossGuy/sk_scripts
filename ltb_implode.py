@@ -10,7 +10,7 @@ import struct
 import sys
 
 from PIL import Image
-from wflz_compress import wflz_compress
+from sk_include.wflz import wflz_compress
 
 def ensure_alignment(f):
 	pos = f.tell()

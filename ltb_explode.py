@@ -10,7 +10,7 @@ import struct
 import sys
 
 from PIL import Image
-from wflz_decompress import wflz_decompress
+from sk_include.wflz import wflz_decompress
 
 row_entry_sizes = [
 	32 + (4 * 24),
