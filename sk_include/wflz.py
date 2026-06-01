@@ -24,14 +24,25 @@ def wflz_compare(data, start_a, start_b, max_len):
 	return matched
 
 class WflzBlock:
-	def __init__(self):
-		self.backref_dist = 0
-		self.backref_length = 0
-		self.literals = bytearray(b"")
+	STRUCT = struct.Struct("<HBB")
+	
+	def __init__(self, reader=None):
+		if reader is None:
+			self.backref_dist = 0
+			self.backref_length = 0
+			self.literals = bytearray(b"")
+		else:
+			(br_dist, br_len, lit_len) = self.STRUCT.unpack(reader.read(WFLZ_BLOCK_SIZE))
+			self.backref_dist = br_dist
+			self.backref_length = br_len
+			self.literals = bytearray(reader.read(lit_len))
 	
 	def write_to(self, writer):
-		writer.write(struct.pack("<HBB", self.backref_dist, self.backref_length, len(self.literals)))
+		writer.write(self.STRUCT.pack(self.backref_dist, self.backref_length, len(self.literals)))
 		writer.write(self.literals)
+	
+	def is_terminator(self):
+		return self.backref_dist == 0 and self.backref_length == 0 and len(self.literals) == 0
 
 def wflz_compress(data):
 	writer = io.BytesIO()
@@ -98,7 +109,7 @@ def wflz_compress(data):
 	block.write_to(writer) # no need for a new block this time since we're already done
 	
 	# add terminator block
-	writer.write(b"\0" * WFLZ_BLOCK_SIZE)
+	WflzBlock().write_to(writer)
 	
 	# write the actual header
 	writer.seek(0)
@@ -122,19 +133,18 @@ def wflz_decompress(reader):
 	(compressed_size, decompressed_size) = struct.unpack("<II", reader.read(8))
 	
 	while True:
-		block = reader.read(WFLZ_BLOCK_SIZE)
-		if block == b"\0\0\0\0":
+		block = WflzBlock(reader)
+		if block.is_terminator():
 			break
 		
-		(backref_dist, backref_length, literal_count) = struct.unpack("<HBB", block)
 		# kind of a gotcha
-		if backref_length > 0:
-			backref_length += WFLZ_MIN_MATCH_LEN - 1
+		real_backref_length = block.backref_length
+		if real_backref_length > 0:
+			real_backref_length += WFLZ_MIN_MATCH_LEN - 1
 		
-		for i in range(backref_length):
-			output.append(output[len(output) - backref_dist])
-		
-		literals = reader.read(literal_count)
-		output.extend(literals)
+		for i in range(real_backref_length):
+			output.append(output[len(output) - block.backref_dist])
+
+		output.extend(block.literals)
 	
 	return output
