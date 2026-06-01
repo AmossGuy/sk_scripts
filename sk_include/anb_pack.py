@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+This is a modified version of code from Shovel-Knight-Toolkit by leamsii, which can be found here:
+
+https://github.com/leamsii/Shovel-Knight-Toolkit
+"""
 
 import sys
 try:

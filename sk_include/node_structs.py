@@ -1,3 +1,9 @@
+"""
+This is a modified version of code from Shovel-Knight-Toolkit by leamsii, which can be found here:
+
+https://github.com/leamsii/Shovel-Knight-Toolkit
+"""
+
 from ctypes import *
 class HeaderStruct(LittleEndianStructure):
 	_fields_ = [
