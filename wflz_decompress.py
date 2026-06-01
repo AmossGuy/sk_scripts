@@ -11,7 +11,9 @@ if __name__ == "__main__":
 	
 	path = sys.argv[1]
 	with open(path, "rb") as f:
-		decompressed = wflz_decompress(f)
+		data = f.read()
+	
+	decompressed = wflz_decompress(data)
 	with open(f"{path} decompressed", "wb") as f:
 		f.write(decompressed)
 	

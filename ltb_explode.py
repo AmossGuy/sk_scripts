@@ -151,7 +151,7 @@ for i in range(8):
 			image_data = ltb_file.read(m["data_size"])
 			
 			if m["compression"] != 0:
-				image_data = wflz_decompress(io.BytesIO(image_data))
+				image_data = wflz_decompress(image_data)
 			image_mode = "RGBA" if m["palettes"][0] == 0xFF_FF_FF_FF else "L"
 			
 			image = Image.frombytes(image_mode, [m["width"], m["height"]], image_data)

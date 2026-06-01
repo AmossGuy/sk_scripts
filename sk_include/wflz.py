@@ -121,7 +121,8 @@ def wflz_compress(data):
 	writer.close()
 	return compressed_data
 
-def wflz_decompress(reader):
+def wflz_decompress(data):
+	reader = io.BytesIO(data)
 	output = bytearray(b"")
 	
 	magic = reader.read(4)
