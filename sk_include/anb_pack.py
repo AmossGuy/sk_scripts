@@ -83,6 +83,8 @@ class ANBPack:
         # match resolved (plain-text) folder names back to their Sequence nodes.
         dir_hash_map = {folder_name_to_hash(d): d for d in sequence_dirs}
 
+        self.initialize_pointer_write_stuff()
+
         for sequence_dir in sequence_dirs:
             sequences[sequence_dir] = {}
             sequences_path = Path(self.directory.joinpath(sequence_dir))
@@ -130,7 +132,8 @@ class ANBPack:
             file.write(struct.pack('<IIIQ', header["fixup"], header["version"], header["pad1"], header["pad2"]))
 
             node = self.metadata['Node']
-            file.write(struct.pack('<IIQ', node["type"], node["num_children"], node["child_pointer"]))
+            file.write(struct.pack('<II8s', node["type"], len(node["children"]), b"\xDE\xAD\xBE\xEF"*2))
+            self.set_pointer_source(file.tell() - 8, node["children"])
 
             self.get_chunk_sizes(node)
 
@@ -141,6 +144,11 @@ class ANBPack:
                 file.write(struct.pack('<I', texture['body']['wflz']['flag']))
                 file.write(struct.pack('<I', texture['body']['wflz']['size']))
                 file.write(texture['body']['wflz']['body'])
+
+            self.do_pointer_writes(file)
+
+            # nonsense for identification during testing
+            # file.seek(0); file.write(b"\xEE" * 4)
 
         print("Log: Finished.")
 
@@ -174,10 +182,13 @@ class ANBPack:
         self.unpack_node(node, file, parent)
 
         TraversedNodes[NodeTypeName[parent['type']]] = TraversedNodes.get(NodeTypeName[parent["type"]], 0) + 1
-        if TraversedNodes[NodeTypeName[parent["type"]]] >= parent["num_children"]:
+        if TraversedNodes[NodeTypeName[parent["type"]]] >= len(parent["children"]):
             TraversedNodes[NodeTypeName[parent["type"]]] = 0
+            self.set_pointer_target(parent["children"], file.tell())
             for child in parent['children']:
-                file.write(struct.pack('<Q', child['offset']))
+                # file.write(struct.pack('<Q', child['offset']))
+                file.write(b"\xDE\xAD\xBE\xEF"*2)
+                self.set_pointer_source(file.tell() - 8, child)
 
         for _node in node['children']:
             self.traverse(file, _node, node)
@@ -185,7 +196,7 @@ class ANBPack:
     def get_chunk_sizes(self, node):
         self.main_body_node_size += NodeStructureSize[NodeTypeName[node['type']]]
         self.main_body_node_size += 16
-        self.main_body_node_size += 8 * node['num_children']
+        self.main_body_node_size += 8 * len(node["children"])
 
         if 'hash_size' in node['body'] and NodeTypeName[node['type']] != 'Vertex':
             self.hash_chunk_size += 4  # Flag
@@ -252,7 +263,12 @@ class ANBPack:
         _type = NodeTypeName[node['type']]
 
         node['offset'] = file.tell()
-        node_chunk_body = struct.pack('<IIQ', node["type"], node["num_children"], node["child_pointer"])
+        self.set_pointer_target(node, node["offset"]) # node["offset"] comes from file.tell() right above
+        if len(node["children"]) == 0:
+            node_chunk_body = struct.pack('<IIQ', node["type"], 0, 0)
+        else:
+            node_chunk_body = struct.pack('<II8s', node["type"], len(node["children"]), b"\xDE\xAD\xBE\xEF"*2)
+            self.set_pointer_source(file.tell() + 8, node["children"]) # plus 8 because node_chunk_body hasn't been written yet!!!
 
         if _type == 'Texture':
             node_chunk_body += struct.pack('<I', node["body"]["width"])
@@ -354,3 +370,22 @@ class ANBPack:
             node_chunk_body += struct.pack('<Q', node["body"]["unk"])
 
         file.write(node_chunk_body)
+
+    def initialize_pointer_write_stuff(self):
+        self.queued_pointer_writes = {}
+
+    def set_pointer_source(self, location, object):
+        entry = self.queued_pointer_writes.setdefault(id(object), {"_obj": object})
+        entry["source_location"] = location
+
+    def set_pointer_target(self, object, offset):
+        entry = self.queued_pointer_writes.setdefault(id(object), {"_obj": object})
+        entry["target_location"] = offset
+
+    def do_pointer_writes(self, file):
+        for key, value in self.queued_pointer_writes.items():
+            try:
+                file.seek(value["source_location"])
+                file.write(struct.pack("<Q", value["target_location"]))
+            except KeyError as e:
+                print(f"continuing pointer writes despite KeyError: {e}")
