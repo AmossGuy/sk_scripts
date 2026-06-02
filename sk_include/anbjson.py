@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, 'include')
 
 import struct
-from node_structs import *
+from sk_include.node_structs import *
 import base64
 
 NodeTypeName = {

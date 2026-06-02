@@ -6,8 +6,9 @@ This is a modified version of code from Shovel-Knight-Toolkit by leamsii, which 
 https://github.com/leamsii/Shovel-Knight-Toolkit
 """
 
-from anbjson import ANBToJSON
-from hash_utils import load_wordlist, build_hash_map, resolve_hash
+from sk_include.anbjson import ANBToJSON
+from sk_include.hash_utils import load_wordlist, build_hash_map, resolve_hash
+from sk_include.wflz import wflz_decompress
 import sys
 
 try:
@@ -33,8 +34,9 @@ class ANBUnpack:
     def __init__(self, filename):
         self.metadata = ANBToJSON(filename).metadata
 
-        self.directory = Path(str(Path(filename).parent) + '\\' + Path(filename).stem)
+        self.directory = Path(filename).parent / Path(filename).stem
         self.directory.mkdir(exist_ok=True)
+        print(self.directory)
 
         frames = self.get_nodes(10, self.metadata['Node'], [])
         sequences = self.get_nodes(12, self.metadata['Node']['children'][0], [])
@@ -75,31 +77,16 @@ class ANBUnpack:
                 texture_width = texture['body']['width']
                 texture_height = texture['body']['height']
 
-                wflz_data = base64.b64decode(texture['body']['wflz']['body'])
-                wflz_file_name = directory_path.joinpath(f'frame_{str(frame_index)}.wflz')
-                open(wflz_file_name, 'wb').write(wflz_data)
-
-                self.extract_wflz(wflz_file_name)
-
-                dat_file = wflz_file_name.with_suffix('.dat')
-                if not dat_file.exists() or dat_file.stat().st_size == 0:
-                    print(f"Warning: frame_{frame_index} — WFLZ extractor produced no output "
-                          f"(texture {texture_width}x{texture_height}, wflz size {len(wflz_data)}). Skipping.")
-                    if wflz_file_name.exists():
-                        os.remove(wflz_file_name)
-                    continue
-
                 if texture_width == 0 or texture_height == 0:
                     print(f"Warning: frame_{frame_index} has zero texture dimensions "
                           f"({texture_width}x{texture_height}). Skipping.")
-                    os.remove(dat_file)
-                    if wflz_file_name.exists():
-                        os.remove(wflz_file_name)
                     continue
 
-                self.create_image(dat_file, texture_width, texture_height, vertex['body']['pieces'], frame_index)
-                if wflz_file_name.exists():
-                    os.remove(wflz_file_name)
+                wflz_data = base64.b64decode(texture['body']['wflz']['body'])
+                decompressed_data = wflz_decompress(wflz_data)
+
+                image_output_path = Path(directory_path / f"frame_{str(frame_index)}.png")
+                self.create_image(decompressed_data, image_output_path, texture_width, texture_height, vertex['body']['pieces'], frame_index)
 
         with open(self.directory.joinpath('metadata.json'), 'w') as file:
             json.dump(self.metadata, file)
@@ -113,8 +100,8 @@ class ANBUnpack:
             self.get_nodes(node_type, _node, nodes)
         return nodes
 
-    def create_image(self, name, frame_width, frame_height, vertices, frame_index):
-        _buffer = Path(name).read_bytes()
+    def create_image(self, data, output_path, frame_width, frame_height, vertices, frame_index):
+        _buffer = data
         expected = frame_width * frame_height * 4
 
         if len(_buffer) < expected:
@@ -156,9 +143,4 @@ class ANBUnpack:
             piece = image_out.crop(region)
             final_image.paste(piece, (x1, y1), piece)
 
-        final_image.save(Path(name).with_suffix('.png'))
-        os.remove(name)
-
-    def extract_wflz(self, filename):
-        filename = f'"{str(filename)}"'
-        os.system("include\\wflz_extractor\\extractor.exe " + filename)
+        final_image.save(output_path)
