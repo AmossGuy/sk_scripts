@@ -19,7 +19,8 @@ from pathlib import Path
 import glob
 import json
 import base64
-from hash_utils import compute_hash
+from sk_include.hash_utils import compute_hash
+from sk_include.wflz import wflz_compress
 
 NodeTypeName = {
     0 : 'Node',
@@ -226,28 +227,12 @@ class ANBPack:
         pixels = [pixels[i * width:(i + 1) * width] for i in range(height)]
         compression_size = width * height * 4
 
-        image_data_file_name = image_name.with_suffix('.dat')
-        with open(image_data_file_name, 'wb') as file:
-            for row in pixels:
-                for r, g, b, a in row:
-                    file.write(struct.pack('<BBBB', r, g, b, a))
+        data = bytearray()
+        for row in pixels:
+            for r, g, b, a in row:
+                data.extend(struct.pack('<BBBB', r, g, b, a))
 
-        image_data_file_name = f'"{str(image_data_file_name)}"'
-
-        script_dir = os.path.dirname(__file__)
-        full_path = os.path.join(script_dir, "wflz_extractor", "extractor.exe")
-
-        os.system(full_path + ' ' + image_data_file_name + ' ' + str(compression_size))
-        with open(Path(image_name).with_suffix('.wflz'), 'rb') as file:
-            file.seek(4)
-            compression_size = struct.unpack('<I', file.read(4))[0]
-        os.system(full_path + ' ' + image_data_file_name + ' ' + str(compression_size + 16))
-        wflz_data = Path(image_name).with_suffix('.wflz').read_bytes()
-
-        os.remove(Path(image_name).with_suffix('.wflz'))
-        os.remove(Path(image_name).with_suffix('.dat'))
-
-        return wflz_data
+        return wflz_compress(data)
 
     def get_padded_image(self, width, height, image):
         new_width = self.align_image(width, 8)

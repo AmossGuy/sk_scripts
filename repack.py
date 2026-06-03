@@ -21,8 +21,9 @@ source_folder = Path(args.folder)
 
 match format_heuristic(source_folder):
 	case ".anb":
-		print("wip: anb to be hooked up next")
-		sys.exit(1)
+		print("detected format: anb")
+		from sk_include.anb_pack import ANBPack
+		ANBPack(source_folder)
 	case ".ltb":
 		print("detected format: ltb")
 		from sk_include.ltb_implode import ltb_implode
