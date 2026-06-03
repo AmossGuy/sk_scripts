@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
 from pathlib import Path
+import sys
 
 parser = ArgumentParser(description="extracts various file formats used by Shovel Knight into editable forms")
 parser.add_argument("filename")
