@@ -73,9 +73,6 @@ class ANBPack:
         metadata_dir = self.directory.joinpath('metadata.json')
         self.metadata = json.loads(metadata_dir.read_text())
         self.hash_chunk = b''
-        self.hash_chunk_size = 0
-        self.main_body_node_size = 0
-        self.previous_wflz_size = 0
 
         os.chdir(self.directory)
         sequence_dirs = [d for d in glob.glob('*') if Path(d).is_dir()]
@@ -119,17 +116,22 @@ class ANBPack:
 
                 frame = frames[frame_index]
                 texture = [n for n in frame['children'] if n['type'] == 1][0]
-                vertex = [n for n in frame['children'] if n['type'] == 2][0]
+                #vertex = [n for n in frame['children'] if n['type'] == 2][0]
 
                 image_width = new_image_sizes[f"frame_{frame_index}.png"]["width"]
                 image_height = new_image_sizes[f"frame_{frame_index}.png"]["height"]
 
-                vertex_chunk = self.build_vertex_chunk(vertex, image_width, image_height, frame_index)
+                #vertex_chunk = self.build_vertex_chunk(vertex, image_width, image_height, frame_index)
 
                 wflz_data = sequences[matched_dir][f"frame_{frame_index}"]
 
+                # we're not writing these right now so we can't set the pointer target just yet
                 texture['body']['wflz']['size'] = len(wflz_data)
-                texture['body']['wflz']['body'] = wflz_data + bytes((self.align(len(wflz_data), 8) - len(wflz_data))) + vertex_chunk
+                texture['body']['wflz']['body'] = wflz_data + bytes((self.align(len(wflz_data), 8) - len(wflz_data)))
+                # ugly contortion to work with the (strange?) program flow
+                #texture["body"]["wflz"]["+vertex_json"] = vertex
+                #texture["body"]["wflz"]["+vertex_chunk"] = vertex_chunk
+                
 
         with open(self.directory.joinpath(self.directory.name + '.anb'), 'wb') as file:
             header = self.metadata['file_header']
@@ -138,23 +140,22 @@ class ANBPack:
             file.write(struct.pack('<IIIQ', header["fixup"], header["version"], header["pad1"], header["pad2"]))
 
             node = self.metadata['Node']
-            file.write(struct.pack('<II8s', node["type"], len(node["children"]), b"\xDE\xAD\xBE\xEF"*2))
-            self.set_pointer_source(file.tell() - 8, node["children"])
-
-            self.get_chunk_sizes(node)
+            file.write(struct.pack('<II8s', node["type"], len(node["children"]), b"\xDE\xAD\xBE\xEF\x01\0\0\0"))
+            self.set_pointer_source(node["children"], file.tell() - 8)
 
             self.traverse(file, node['children'][0], node)
+
+            self.hash_chunk_pointer = file.tell()
             file.write(self.hash_chunk)
 
             for texture in self.get_nodes(1, self.metadata['Node']['children'][0], []):
+                self.set_pointer_target(texture["body"]["wflz"], file.tell())
                 file.write(struct.pack('<I', texture['body']['wflz']['flag']))
                 file.write(struct.pack('<I', texture['body']['wflz']['size']))
                 file.write(texture['body']['wflz']['body'])
+                file.write(texture["body"]["wflz"]["+vertex_chunk"])
 
             self.do_pointer_writes(file)
-
-            # nonsense for identification during testing
-            # file.seek(0); file.write(b"\xEE" * 4)
 
         print("Log: Finished.")
 
@@ -193,30 +194,11 @@ class ANBPack:
             self.set_pointer_target(parent["children"], file.tell())
             for child in parent['children']:
                 # file.write(struct.pack('<Q', child['offset']))
-                file.write(b"\xDE\xAD\xBE\xEF"*2)
-                self.set_pointer_source(file.tell() - 8, child)
+                file.write(b"\xDE\xAD\xBE\xEF\x02\0\0\0")
+                self.set_pointer_source(child, file.tell() - 8)
 
         for _node in node['children']:
             self.traverse(file, _node, node)
-
-    def get_chunk_sizes(self, node):
-        self.main_body_node_size += NodeStructureSize[NodeTypeName[node['type']]]
-        self.main_body_node_size += 16
-        self.main_body_node_size += 8 * len(node["children"])
-
-        if 'hash_size' in node['body'] and NodeTypeName[node['type']] != 'Vertex':
-            self.hash_chunk_size += 4  # Flag
-            self.hash_chunk_size += 4  # Size
-            self.hash_chunk_size += node['body']['hash_size'] + (self.align(node['body']['hash_size'], 8) - node['body']['hash_size'])
-
-        if 'string_size' in node['body']:
-            self.hash_chunk_size += 4  # Flag
-            self.hash_chunk_size += 4  # Size
-            self.hash_chunk_size += node['body']['string_size']
-            self.hash_chunk_size += self.align(node["body"]["string_size"], 8) - node["body"]["string_size"]
-
-        for _node in node['children']:
-            self.get_chunk_sizes(_node)
 
     def compress_image(self, image_name):
         _image = Image.open(image_name)
@@ -252,13 +234,14 @@ class ANBPack:
     def unpack_node(self, node, file, parent):
         _type = NodeTypeName[node['type']]
 
-        node['offset'] = file.tell()
-        self.set_pointer_target(node, node["offset"]) # node["offset"] comes from file.tell() right above
+        file_tell = file.tell()
+        node['offset'] = file_tell
+        self.set_pointer_target(node, file_tell)
         if len(node["children"]) == 0:
             node_chunk_body = struct.pack('<IIQ', node["type"], 0, 0)
         else:
-            node_chunk_body = struct.pack('<II8s', node["type"], len(node["children"]), b"\xDE\xAD\xBE\xEF"*2)
-            self.set_pointer_source(file.tell() + 8, node["children"]) # plus 8 because node_chunk_body hasn't been written yet!!!
+            node_chunk_body = struct.pack('<II8s', node["type"], len(node["children"]), b"\xDE\xAD\xBE\xEF\x03\0\0\0")
+            self.set_pointer_source(node["children"], file_tell + 8) # plus 8 because node_chunk_body hasn't been written yet!!!
 
         if _type == 'Texture':
             node_chunk_body += struct.pack('<I', node["body"]["width"])
@@ -266,8 +249,8 @@ class ANBPack:
             node_chunk_body += struct.pack('<I', node["body"]["flags"])
             node_chunk_body += struct.pack('<I', node["body"]["padding"])
 
-            data_offset = self.main_body_node_size + self.hash_chunk_size + self.previous_wflz_size
-            node_chunk_body += struct.pack('<Q', data_offset)
+            self.set_pointer_source(node["body"]["wflz"], file_tell + len(node_chunk_body))
+            node_chunk_body += b"\xDE\xAD\xBE\xEF\x04\0\0\0"
 
         if _type == 'Vertex':
             node_chunk_body += struct.pack('<I', node["body"]["num_verts"])
@@ -276,11 +259,8 @@ class ANBPack:
             parent_texture = [n for n in parent['children'] if n['type'] == 1][0]
             parent_vertex = [n for n in parent['children'] if n['type'] == 2][0]
 
-            self.previous_wflz_size += len(parent_texture['body']['wflz']['body']) + 8
-            offset = 8 + (16 * parent_vertex["body"]["num_verts"])
-            data_offset = (self.main_body_node_size + self.hash_chunk_size + (self.previous_wflz_size - offset))
-
-            node_chunk_body += struct.pack('<Q', data_offset)
+            #self.set_pointer_source(parent_texture["body"]["wflz"]["+vertex_json"], file_tell + len(node_chunk_body))
+            node_chunk_body += b"\xDE\xAD\xBE\xEF\x05\0\0\0"
 
         if _type == 'MetaPoint':
             node_chunk_body += struct.pack('<f', node["body"]["x"])
@@ -308,8 +288,8 @@ class ANBPack:
             node_chunk_body += struct.pack('<I', node["body"]["str_length"])
             node_chunk_body += struct.pack('<I', node["body"]["padding"])
 
-            hash_offset = self.main_body_node_size + len(self.hash_chunk)
-            node_chunk_body += struct.pack('<Q', hash_offset)
+            self.set_pointer_source(node["body"]["string"], file_tell + len(node_chunk_body))
+            node_chunk_body += b"\xDE\xAD\xBE\xEF\x06\0\0\0"
             self.hash_chunk += struct.pack('<I', node["body"]["string_flag"])
             self.hash_chunk += struct.pack('<I', node["body"]["string_size"])
 
@@ -318,9 +298,11 @@ class ANBPack:
 
         if _type == 'MetaTable':
             hashname_pointer = node['body']['hashname_pointer']
-            hash_offset = self.main_body_node_size + len(self.hash_chunk)
             if hashname_pointer != 0:
-                node_chunk_body += struct.pack('<Q', hash_offset)
+                self.set_pointer_source(node["body"]["hash"], file_tell + len(node_chunk_body))
+                node_chunk_body += b"\xDE\xAD\xBE\xEF\x07\0\0\0"
+
+                self.set_pointer_target(node["body"]["hash"], len(self.hash_chunk), relative_to_hash_chunk=True)
                 self.hash_chunk += struct.pack('<I', node["body"]["hash_flag"])
                 self.hash_chunk += struct.pack('<I', node["body"]["hash_size"])
 
@@ -343,7 +325,10 @@ class ANBPack:
             node_chunk_body += struct.pack('<I', node["body"]["single_texture"])
             node_chunk_body += struct.pack('<I', node["body"]["palette_index"])
 
-            node_chunk_body += struct.pack('<Q', self.main_body_node_size)
+            self.set_pointer_source(node["body"]["hash"], file_tell + len(node_chunk_body))
+            node_chunk_body += b"\xDE\xAD\xBE\xEF\x08\0\0\0"
+
+            self.set_pointer_target(node["body"]["hash"], file_tell + len(node_chunk_body), relative_to_hash_chunk=True)
             self.hash_chunk += struct.pack('<I', node["body"]["hash_flag"])
             self.hash_chunk += struct.pack('<I', node["body"]["hash_size"])
 
@@ -364,18 +349,26 @@ class ANBPack:
     def initialize_pointer_write_stuff(self):
         self.queued_pointer_writes = {}
 
-    def set_pointer_source(self, location, object):
+    def set_pointer_source(self, object, location):
         entry = self.queued_pointer_writes.setdefault(id(object), {"_obj": object})
         entry["source_location"] = location
 
-    def set_pointer_target(self, object, offset):
+    def set_pointer_target(self, object, offset, relative_to_hash_chunk=False):
         entry = self.queued_pointer_writes.setdefault(id(object), {"_obj": object})
         entry["target_location"] = offset
+        entry["relative_to_hash_chunk"] = relative_to_hash_chunk
 
     def do_pointer_writes(self, file):
         for key, value in self.queued_pointer_writes.items():
             try:
                 file.seek(value["source_location"])
-                file.write(struct.pack("<Q", value["target_location"]))
+                target_location = value["target_location"]
+                if value["relative_to_hash_chunk"]:
+                    target_location += self.hash_chunk_pointer
+                file.write(struct.pack("<Q", target_location))
             except KeyError as e:
                 print(f"continuing pointer writes despite KeyError: {e}")
+                if "source_location" in value:
+                    print(f"(source_location: {hex(value['source_location'])})")
+                if "target_location" in value:
+                    print(f"(target_location: {hex(value['target_location'])})")
