@@ -287,9 +287,10 @@ class ANBPack:
 
             self.set_pointer_source(node["body"]["string"], file_tell + len(node_chunk_body))
             node_chunk_body += b"\xDE\xAD\xBE\xEF\x06\0\0\0"
+
+            self.set_pointer_target(node["body"]["string"], len(self.hash_chunk), relative_to_hash_chunk=True)
             self.hash_chunk += struct.pack('<I', node["body"]["string_flag"])
             self.hash_chunk += struct.pack('<I', node["body"]["string_size"])
-
             hash = node["body"]["string"].encode('utf-8')
             self.hash_chunk += hash + bytes(self.align(node["body"]["string_size"], 8) - node["body"]["string_size"])
 
