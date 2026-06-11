@@ -116,22 +116,12 @@ class ANBPack:
 
                 frame = frames[frame_index]
                 texture = [n for n in frame['children'] if n['type'] == 1][0]
-                #vertex = [n for n in frame['children'] if n['type'] == 2][0]
-
-                image_width = new_image_sizes[f"frame_{frame_index}.png"]["width"]
-                image_height = new_image_sizes[f"frame_{frame_index}.png"]["height"]
-
-                #vertex_chunk = self.build_vertex_chunk(vertex, image_width, image_height, frame_index)
 
                 wflz_data = sequences[matched_dir][f"frame_{frame_index}"]
 
                 # we're not writing these right now so we can't set the pointer target just yet
                 texture['body']['wflz']['size'] = len(wflz_data)
                 texture['body']['wflz']['body'] = wflz_data + bytes((self.align(len(wflz_data), 8) - len(wflz_data)))
-                # ugly contortion to work with the (strange?) program flow
-                #texture["body"]["wflz"]["+vertex_json"] = vertex
-                #texture["body"]["wflz"]["+vertex_chunk"] = vertex_chunk
-                
 
         with open(self.directory.joinpath(self.directory.name + '.anb'), 'wb') as file:
             header = self.metadata['file_header']
@@ -148,12 +138,16 @@ class ANBPack:
             self.hash_chunk_pointer = file.tell()
             file.write(self.hash_chunk)
 
-            for texture in self.get_nodes(1, self.metadata['Node']['children'][0], []):
-                self.set_pointer_target(texture["body"]["wflz"], file.tell())
-                file.write(struct.pack('<I', texture['body']['wflz']['flag']))
-                file.write(struct.pack('<I', texture['body']['wflz']['size']))
-                file.write(texture['body']['wflz']['body'])
-                file.write(texture["body"]["wflz"]["+vertex_chunk"])
+            for node in self.get_nodes([1, 2], self.metadata['Node']['children'][0], []):
+                if node["type"] == 1: # texture
+                    self.set_pointer_target(node["body"]["wflz"], file.tell())
+                    file.write(struct.pack('<I', node['body']['wflz']['flag']))
+                    file.write(struct.pack('<I', node['body']['wflz']['size']))
+                    file.write(node['body']['wflz']['body'])
+                elif node["type"] == 2: # vertex
+                    self.set_pointer_target(node["body"]["pieces"], file.tell())
+                    vertex_chunk = self.build_vertex_chunk(node)
+                    file.write(vertex_chunk)
 
             self.do_pointer_writes(file)
 
@@ -164,13 +158,16 @@ class ANBPack:
         return (v + mask) & ~mask
 
     def get_nodes(self, node_type, node, nodes):
-        if node['type'] == node_type:
+        if not isinstance(node_type, (list, tuple)):
+            node_type = [node_type]
+
+        if node['type'] in node_type:
             nodes.append(node)
         for _node in node['children']:
             self.get_nodes(node_type, _node, nodes)
         return nodes
 
-    def build_vertex_chunk(self, vertex, image_width, image_height, frame_index):
+    def build_vertex_chunk(self, vertex):
         vertex_chunk = b''
         vertex_chunk += struct.pack('<I', vertex["body"]["hash_flag"])
         vertex_chunk += struct.pack('<I', vertex["body"]["hash_size"])
@@ -259,7 +256,7 @@ class ANBPack:
             parent_texture = [n for n in parent['children'] if n['type'] == 1][0]
             parent_vertex = [n for n in parent['children'] if n['type'] == 2][0]
 
-            #self.set_pointer_source(parent_texture["body"]["wflz"]["+vertex_json"], file_tell + len(node_chunk_body))
+            self.set_pointer_source(node["body"]["pieces"], file_tell + len(node_chunk_body))
             node_chunk_body += b"\xDE\xAD\xBE\xEF\x05\0\0\0"
 
         if _type == 'MetaPoint':
