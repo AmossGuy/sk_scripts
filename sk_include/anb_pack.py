@@ -253,9 +253,6 @@ class ANBPack:
             node_chunk_body += struct.pack('<I', node["body"]["num_verts"])
             node_chunk_body += struct.pack('<I', node["body"]["flags"])
 
-            parent_texture = [n for n in parent['children'] if n['type'] == 1][0]
-            parent_vertex = [n for n in parent['children'] if n['type'] == 2][0]
-
             self.set_pointer_source(node["body"]["pieces"], file_tell + len(node_chunk_body))
             node_chunk_body += b"\xDE\xAD\xBE\xEF\x05\0\0\0"
 
@@ -295,8 +292,7 @@ class ANBPack:
             self.hash_chunk += hash + bytes(self.align(node["body"]["string_size"], 8) - node["body"]["string_size"])
 
         if _type == 'MetaTable':
-            hashname_pointer = node['body']['hashname_pointer']
-            if hashname_pointer != 0:
+            if node['body']['hashname_pointer'] != 0:
                 self.set_pointer_source(node["body"]["hash"], file_tell + len(node_chunk_body))
                 node_chunk_body += b"\xDE\xAD\xBE\xEF\x07\0\0\0"
 
@@ -326,7 +322,7 @@ class ANBPack:
             self.set_pointer_source(node["body"]["hash"], file_tell + len(node_chunk_body))
             node_chunk_body += b"\xDE\xAD\xBE\xEF\x08\0\0\0"
 
-            self.set_pointer_target(node["body"]["hash"], file_tell + len(node_chunk_body), relative_to_hash_chunk=True)
+            self.set_pointer_target(node["body"]["hash"], len(self.hash_chunk), relative_to_hash_chunk=True)
             self.hash_chunk += struct.pack('<I', node["body"]["hash_flag"])
             self.hash_chunk += struct.pack('<I', node["body"]["hash_size"])
 
